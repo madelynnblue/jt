@@ -1,0 +1,39 @@
+# Jam Timer
+
+Single-screen roller derby jam timer. One HTML file, no build step, no dependencies, no network.
+
+## What it does
+
+- **Period clock** — 30:00 per period, two periods.
+- **Jam clock** — 2:00 per jam.
+- **Lineup** — 0:30 countdown starts automatically when a jam ends.
+- **Timeout** — 1:00 countdown; stops the period clock. Available between jams or to end a jam.
+- **START JAM / END JAM** — one big context-sensitive button.
+- **End-of-jam alert** — a quiet two-note chime plus a vibration when the jam clock reaches 0:00. It's for the phone holder, not the players: low gain, no whistle. Keep the phone volume low or use an earbud. **TEST** fires it on demand; a manual END JAM stays silent.
+- **Two-tap RESET** — tap once and the button arms (`SURE?`), tap again to reset the bout.
+- The period clock runs through lineup time, stops during timeouts, and stops when it hits 0:00. If it expires mid-jam, the jam plays out and the period ends with it.
+- After period 1 the button becomes **START PERIOD 2**; after period 2 it becomes **NEW BOUT**.
+
+Hardcoded WFTDA defaults on purpose: no settings, presets, score, or storage. Reloading the page starts a fresh bout.
+
+Phone notes: iOS mutes Web Audio when the ringer switch is off and has no vibration API, so the chime may be silent and TEST will only feel like a no-op there. Android generally supports both, and the audio must be unlocked by a tap (the first button press does that).
+
+## Run
+
+Open `index.html` directly, or serve it:
+
+```sh
+python3 -m http.server 8000
+```
+
+## Deploy
+
+`.github/workflows/pages.yml` publishes `index.html` and `CNAME` to GitHub Pages. The project repo is served at **https://jt.madelynn.blue/jt/**.
+
+## Files
+
+```
+index.html                     the whole app
+CNAME                          custom domain for GitHub Pages
+.github/workflows/pages.yml    Pages deployment
+```

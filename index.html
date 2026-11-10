@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#070b10">
+<meta name="color-scheme" content="dark light">
+<title>Jam Timer</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#070b10;--panel:#101923;--line:#22303f;--text:#eef5fb;--muted:#8ea4b7;
+  --go:#2fd18a;--goInk:#03251a;--stop:#ff4d61;--stopInk:#fff;
+  --accent:#ff7a59;--blue:#5cb8ff;--warn:#ffc857;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{--bg:#eef2f6;--panel:#fff;--line:#d3dde7;--text:#0c151d;--muted:#5a6f83;
+    --go:#0f9f6a;--goInk:#fff;--stop:#d62b40;--stopInk:#fff;
+    --accent:#e2552f;--blue:#0a74c9;--warn:#b77900;}
+}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  height:100vh;height:100dvh;display:flex;overflow:hidden;overscroll-behavior:none;
+  -webkit-tap-highlight-color:transparent;user-select:none;-webkit-font-smoothing:antialiased;
+}
+main{
+  flex:1;display:flex;flex-direction:column;gap:9px;width:100%;max-width:820px;margin:0 auto;
+  padding:calc(10px + env(safe-area-inset-top)) 14px calc(12px + env(safe-area-inset-bottom));
+}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px}
+.badge{
+  font-size:.64rem;font-weight:800;letter-spacing:.13em;padding:6px 9px;border-radius:8px;
+  border:1px solid var(--line);color:var(--muted);white-space:nowrap;
+}
+body[data-phase="jam"] .badge{color:var(--accent);border-color:rgba(255,122,89,.45)}
+body[data-phase="lineup"] .badge{color:var(--blue);border-color:rgba(92,184,255,.4)}
+body[data-phase="timeout"] .badge{color:var(--warn);border-color:rgba(255,200,87,.4)}
+.meta{font-size:.68rem;font-weight:700;letter-spacing:.08em;color:var(--muted);white-space:nowrap}
+.meta b{color:var(--text);font-weight:800}
+
+.period{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:8px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);
+}
+.lbl{font-size:.6rem;font-weight:800;letter-spacing:.14em;color:var(--muted)}
+.periodTime{
+  font-family:var(--mono);font-size:clamp(1.6rem,7vw,2.4rem);font-weight:800;
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1;
+}
+.periodTime.over{color:var(--stop)}
+
+.clock{
+  position:relative;flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:2px;padding:8px 12px;border:1px solid var(--line);
+  border-radius:22px;background:var(--panel);overflow:hidden;
+}
+body[data-phase="jam"] .clock{border-color:rgba(255,122,89,.4)}
+body[data-phase="lineup"] .clock{border-color:rgba(92,184,255,.35)}
+body[data-phase="timeout"] .clock{border-color:rgba(255,200,87,.4)}
+.clockLabel{font-size:clamp(.6rem,2.4vw,.8rem);font-weight:800;letter-spacing:.16em;color:var(--muted)}
+.clockTime{
+  font-family:var(--mono);font-weight:800;line-height:.9;letter-spacing:-.05em;
+  font-variant-numeric:tabular-nums;font-size:clamp(5rem,min(34vw,32vh),14rem);white-space:nowrap;
+}
+body[data-phase="jam"] .clockTime{color:var(--accent)}
+body[data-phase="lineup"] .clockTime{color:var(--blue)}
+body[data-phase="timeout"] .clockTime{color:var(--warn)}
+.clockSub{font-size:clamp(.7rem,2.7vw,.9rem);color:var(--muted);text-align:center;min-height:1.2em}
+
+.primary{
+  width:100%;min-height:clamp(70px,12vh,96px);border:0;border-radius:18px;
+  font-weight:900;font-size:clamp(1.05rem,4.2vw,1.4rem);letter-spacing:.09em;text-transform:uppercase;
+  transition:transform .06s ease;
+}
+.primary:active{transform:scale(.985)}
+.primary.go{background:var(--go);color:var(--goInk)}
+.primary.stop{background:var(--stop);color:var(--stopInk)}
+.primary.neutral{background:var(--panel);color:var(--text);border:1px solid var(--line)}
+.row{display:flex;gap:8px}
+.util{
+  flex:1;min-height:52px;border:1px solid var(--line);border-radius:14px;background:transparent;
+  color:var(--muted);font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+}
+.util:active{background:var(--panel)}
+.util:disabled{opacity:.35}
+.util.armed{color:var(--stop);border-color:rgba(255,77,97,.55)}
+
+@media (orientation:landscape) and (max-height:560px){
+  main{gap:6px;padding-top:calc(6px + env(safe-area-inset-top))}
+  .period{padding:5px 12px}
+  .periodTime{font-size:1.45rem}
+  .clockTime{font-size:clamp(3.4rem,min(26vw,30vh),7rem)}
+  .primary{min-height:64px}
+  .util{min-height:44px}
+}
+</style>
+</head>
+<body data-phase="ready">
+<main>
+  <header>
+    <span id="phase" class="badge" aria-live="polite">READY</span>
+    <span class="meta"><b id="periodMeta">PERIOD 1/2</b> · <span id="jamMeta">JAM 0</span></span>
+  </header>
+
+  <section class="period" aria-label="Period clock">
+    <span class="lbl">PERIOD</span>
+    <span id="periodTime" class="periodTime">30:00</span>
+  </section>
+
+  <section class="clock" aria-label="Jam clock">
+    <div id="clockLabel" class="clockLabel">JAM CLOCK</div>
+    <div id="clockTime" class="clockTime">2:00</div>
+    <div id="clockSub" class="clockSub">Tap start</div>
+  </section>
+
+  <button id="primary" class="primary go">START JAM</button>
+  <div class="row">
+    <button id="timeout" class="util" disabled>TIMEOUT</button>
+    <button id="test" class="util" aria-label="Test end-of-jam alert">TEST</button>
+    <button id="reset" class="util">RESET</button>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var PERIOD_MS = 30 * 60 * 1000;
+  var JAM_MS = 2 * 60 * 1000;
+  var LINEUP_MS = 30 * 1000;
+  var TIMEOUT_MS = 60 * 1000;
+  var PERIODS = 2;
+
+  var phase = 'ready';
+  var periodNo = 1;
+  var jamNo = 0;
+  var period = { value: PERIOD_MS, running: false, anchor: 0 };
+  var main = { value: JAM_MS, running: false, anchor: 0, mode: 'jam' };
+
+  var lastFrame = 0;
+  var resetArmed = false;
+  var resetTimer = null;
+
+  var el = {
+    badge: document.getElementById('phase'),
+    periodMeta: document.getElementById('periodMeta'),
+    jamMeta: document.getElementById('jamMeta'),
+    periodTime: document.getElementById('periodTime'),
+    clockLabel: document.getElementById('clockLabel'),
+    clockTime: document.getElementById('clockTime'),
+    clockSub: document.getElementById('clockSub'),
+    primary: document.getElementById('primary'),
+    timeout: document.getElementById('timeout'),
+    test: document.getElementById('test'),
+    reset: document.getElementById('reset')
+  };
+
+  var actx = null;
+
+  function audio() {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!actx) { try { actx = new AC(); } catch(e) { return null; } }
+    if (actx.state === 'suspended') { actx.resume().catch(function () {}); }
+    return actx;
+  }
+
+  function chime() {
+    var a = audio();
+    if (!a) return;
+    var t = a.currentTime + 0.02;
+    var notes = [880, 1174];
+    for (var i = 0; i < notes.length; i++) {
+      var at = t + i * 0.18;
+      var o = a.createOscillator();
+      var g = a.createGain();
+      o.type = 'sine';
+      o.frequency.value = notes[i];
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.12, at + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.17);
+      o.connect(g);
+      g.connect(a.destination);
+      o.start(at);
+      o.stop(at + 0.19);
+    }
+  }
+
+  function buzz() {
+    if (!navigator.vibrate) return;
+    try { navigator.vibrate([70, 50, 70, 50, 180]); } catch(e) {}
+  }
+
+  function alertEnd() {
+    buzz();
+    chime();
+  }
+
+  function now() { return performance.now(); }
+
+  function read(c) {
+    if (!c.running) return Math.max(0, c.value);
+    return Math.max(0, c.value - (now() - c.anchor));
+  }
+  function start(c) {
+    if (c.running) return;
+    c.anchor = now();
+    c.running = true;
+  }
+  function stop(c) {
+    if (!c.running) return;
+    c.value = read(c);
+    c.running = false;
+  }
+  function setMain(mode, ms, running) {
+    main = { mode: mode, value: ms, running: false, anchor: 0 };
+    if (running) start(main);
+  }
+  function fmt(ms) {
+    var t = Math.ceil(Math.max(0, ms) / 1000);
+    return Math.floor(t / 60) + ':' + (t % 60 < 10 ? '0' : '') + (t % 60);
+  }
+  function set(node, text) {
+    if (node.textContent !== text) node.textContent = text;
+  }
+
+  function startJam() {
+    if (phase === 'done') {
+      if (periodNo < PERIODS) startNextPeriod();
+      return;
+    }
+    if (phase !== 'ready' && phase !== 'lineup') return;
+    if (phase === 'ready') {
+      periodNo = 1;
+      jamNo = 0;
+      period = { value: PERIOD_MS, running: false, anchor: 0 };
+    }
+    jamNo += 1;
+    phase = 'jam';
+    setMain('jam', JAM_MS, true);
+    if (period.value > 0) start(period);
+    render();
+  }
+
+  function endJam(auto) {
+    if (phase !== 'jam') return;
+    stop(main);
+    if (auto) alertEnd();
+    if (read(period) <= 0) { periodOver(); return; }
+    phase = 'lineup';
+    setMain('lineup', LINEUP_MS, true);
+    render();
+  }
+
+  function periodOver() {
+    main.value = 0;
+    main.running = false;
+    stop(period);
+    phase = 'done';
+    render();
+  }
+
+  function startNextPeriod() {
+    periodNo += 1;
+    period = { value: PERIOD_MS, running: false, anchor: 0 };
+    phase = 'lineup';
+    setMain('lineup', LINEUP_MS, true);
+    render();
+  }
+
+  function toggleTimeout() {
+    if (phase === 'timeout') { endTimeout(); return; }
+    if (phase !== 'jam' && phase !== 'lineup') return;
+    stop(main);
+    stop(period);
+    phase = 'timeout';
+    setMain('timeout', TIMEOUT_MS, true);
+    render();
+  }
+
+  function endTimeout() {
+    if (phase !== 'timeout') return;
+    stop(main);
+    if (read(period) <= 0) { periodOver(); return; }
+    phase = 'lineup';
+    setMain('lineup', LINEUP_MS, true);
+    render();
+  }
+
+  function resetAll() {
+    phase = 'ready';
+    periodNo = 1;
+    jamNo = 0;
+    period = { value: PERIOD_MS, running: false, anchor: 0 };
+    setMain('jam', JAM_MS, false);
+    render();
+  }
+
+  function handleReset() {
+    if (!resetArmed) { armReset(); return; }
+    disarmReset();
+    resetAll();
+  }
+  function armReset() {
+    resetArmed = true;
+    el.reset.textContent = 'SURE?';
+    el.reset.classList.add('armed');
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(disarmReset, 2500);
+  }
+  function disarmReset() {
+    resetArmed = false;
+    el.reset.textContent = 'RESET';
+    el.reset.classList.remove('armed');
+    clearTimeout(resetTimer);
+  }
+
+  function render() {
+    document.body.dataset.phase = phase;
+
+    var p = read(period);
+    var m = read(main);
+
+    set(el.periodTime, fmt(p));
+    el.periodTime.classList.toggle('over', p <= 0);
+    set(el.periodMeta, 'PERIOD ' + periodNo + '/' + PERIODS);
+    set(el.jamMeta, 'JAM ' + jamNo);
+
+    var badge = phase === 'ready' ? 'READY'
+      : phase === 'jam' ? 'JAM'
+      : phase === 'lineup' ? 'LINEUP'
+      : phase === 'timeout' ? 'TIMEOUT'
+      : periodNo < PERIODS ? 'PERIOD OVER' : 'FINAL';
+    set(el.badge, badge);
+
+    var label, sub, plabel, pclass = 'go', tdis = false;
+
+    if (phase === 'jam') {
+      label = 'JAM CLOCK';
+      sub = 'Jam ' + jamNo + (p <= 0 ? ' · period time expired' : '');
+      plabel = 'END JAM';
+      pclass = 'stop';
+    } else if (phase === 'lineup') {
+      label = 'LINEUP';
+      sub = m <= 0 ? 'Tap start for the next jam' : 'Next jam';
+      plabel = 'START JAM';
+    } else if (phase === 'timeout') {
+      label = 'TIMEOUT';
+      sub = 'Period clock stopped';
+      plabel = 'END TIMEOUT';
+      tdis = true;
+    } else if (phase === 'done') {
+      label = periodNo < PERIODS ? 'PERIOD ' + periodNo + ' OVER' : 'FINAL';
+      sub = periodNo < PERIODS ? 'Tap to start period ' + (periodNo + 1) : 'Bout complete';
+      plabel = periodNo < PERIODS ? 'START PERIOD ' + (periodNo + 1) : 'NEW BOUT';
+      pclass = periodNo < PERIODS ? 'go' : 'neutral';
+      tdis = true;
+    } else {
+      label = 'JAM CLOCK';
+      sub = 'Tap start';
+      plabel = 'START JAM';
+      tdis = true;
+    }
+
+    set(el.clockLabel, label);
+    set(el.clockSub, sub);
+    set(el.clockTime, fmt(m));
+
+    if (el.primary.textContent !== plabel) el.primary.textContent = plabel;
+    el.primary.className = 'primary ' + pclass;
+    el.timeout.disabled = tdis;
+  }
+
+  function tick() {
+    requestAnimationFrame(tick);
+    var t = now();
+    if (t - lastFrame < 50) return;
+    lastFrame = t;
+
+    var m = read(main);
+    var p = read(period);
+
+    if (phase === 'jam' && m <= 0) {
+      endJam(true);
+    } else if (phase === 'lineup' && m <= 0) {
+      stop(main);
+    } else if (phase === 'timeout' && m <= 0) {
+      stop(main);
+    }
+
+    if (phase === 'lineup' && read(period) <= 0) periodOver();
+
+    render();
+  }
+
+  el.primary.addEventListener('click', function () {
+    if (phase === 'jam') endJam(false);
+    else if (phase === 'timeout') endTimeout();
+    else if (phase === 'done') {
+      if (periodNo < PERIODS) startNextPeriod();
+      else resetAll();
+    } else {
+      startJam();
+    }
+  });
+  el.timeout.addEventListener('click', toggleTimeout);
+  el.test.addEventListener('click', function () {
+    audio();
+    alertEnd();
+  });
+  el.reset.addEventListener('click', handleReset);
+  document.addEventListener('pointerdown', function () { audio(); });
+
+  window.__jt = {
+    get phase() { return phase; },
+    get jam() { return jamNo; },
+    get periodNo() { return periodNo; },
+    read: function () { return { period: read(period), main: read(main) }; },
+    setMain: function (ms) { main.value = Math.max(0, ms); main.anchor = now(); },
+    setPeriod: function (ms) { period.value = Math.max(0, ms); period.anchor = now(); },
+    alert: alertEnd
+  };
+
+  render();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
