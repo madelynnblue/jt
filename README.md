@@ -28,7 +28,7 @@ python3 -m http.server 8000
 
 ## Deploy
 
-`.github/workflows/pages.yml` publishes `index.html` and `CNAME` to GitHub Pages. The project repo is served at **https://jt.madelynn.blue/jt/**.
+`.github/workflows/pages.yml` publishes `index.html` and `CNAME` to GitHub Pages. With the custom domain attached, the site is served at **https://jt.madelynn.blue/**.
 
 ## Files
 
