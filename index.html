@@ -3,9 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#070b10">
+<meta name="theme-color" id="metaTheme" content="#070b10">
 <meta name="color-scheme" content="dark light">
 <title>Jam Timer</title>
+<script>
+(function () {
+  var pref = null;
+  try { pref = localStorage.getItem('jam-timer-theme'); } catch (e) {}
+  var light = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  var theme = (pref === 'light' || pref === 'dark') ? pref : (light ? 'light' : 'dark');
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.style.colorScheme = theme;
+  var meta = document.getElementById('metaTheme');
+  if (meta) meta.setAttribute('content', theme === 'dark' ? '#070b10' : '#eef2f6');
+})();
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -16,11 +28,9 @@
   --font:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
 }
-@media (prefers-color-scheme: light){
-  :root{--bg:#eef2f6;--panel:#fff;--line:#d3dde7;--text:#0c151d;--muted:#5a6f83;
-    --go:#0f9f6a;--goInk:#fff;--stop:#d62b40;--stopInk:#fff;
-    --accent:#e2552f;--blue:#0a74c9;--warn:#b77900;}
-}
+:root[data-theme="light"]{--bg:#eef2f6;--panel:#fff;--line:#d3dde7;--text:#0c151d;--muted:#5a6f83;
+  --go:#0f9f6a;--goInk:#fff;--stop:#d62b40;--stopInk:#fff;
+  --accent:#e2552f;--blue:#0a74c9;--warn:#b77900;}
 html,body{height:100%}
 body{
   margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
@@ -39,8 +49,15 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px;min
 body[data-phase="jam"] .badge{color:var(--accent);border-color:rgba(255,122,89,.45)}
 body[data-phase="lineup"] .badge{color:var(--blue);border-color:rgba(92,184,255,.4)}
 body[data-phase="timeout"] .badge{color:var(--warn);border-color:rgba(255,200,87,.4)}
-.meta{font-size:.68rem;font-weight:700;letter-spacing:.08em;color:var(--muted);white-space:nowrap}
+.meta{font-size:.68rem;font-weight:700;letter-spacing:.08em;color:var(--muted);white-space:nowrap;
+  min-width:0;overflow:hidden;text-overflow:ellipsis}
 .meta b{color:var(--text);font-weight:800}
+.headerEnd{display:flex;align-items:center;gap:8px;min-width:0}
+.themeBtn{
+  flex:0 0 auto;background:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);
+  font-size:.55rem;font-weight:800;letter-spacing:.1em;padding:5px 7px;line-height:1;
+}
+.themeBtn:active{background:var(--panel)}
 
 .period{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -131,7 +148,10 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
 <main>
   <header>
     <span id="phase" class="badge" aria-live="polite">READY</span>
-    <span class="meta"><b id="periodMeta">PERIOD 1/2</b> · <span id="jamMeta">JAM 0</span></span>
+    <span class="headerEnd">
+      <span class="meta"><b id="periodMeta">PERIOD 1/2</b> · <span id="jamMeta">JAM 0</span></span>
+      <button id="theme" class="themeBtn" aria-label="Theme: follow device">AUTO</button>
+    </span>
   </header>
 
   <section class="period" aria-label="Period clock">
@@ -172,9 +192,11 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
 
   var PERIODS = 2;
   var TIMES_KEY = 'jam-timer-times';
+  var THEME_KEY = 'jam-timer-theme';
   var DEFAULTS = { period: 30 * 60, jam: 2 * 60, lineup: 30, timeout: 60 };
   var KIND_LABELS = { period: 'PERIOD LENGTH', jam: 'JAM LENGTH', lineup: 'LINEUP LENGTH', timeout: 'TIMEOUT LENGTH' };
   var settings = loadTimes();
+  var themePref = loadThemePref();
 
   var phase = 'ready';
   var periodNo = 1;
@@ -207,7 +229,8 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     editorLabel: document.getElementById('editorLabel'),
     editorInput: document.getElementById('editorInput'),
     editorSet: document.getElementById('editorSet'),
-    editorCancel: document.getElementById('editorCancel')
+    editorCancel: document.getElementById('editorCancel'),
+    theme: document.getElementById('theme')
   };
 
   var actx = null;
@@ -294,6 +317,34 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   }
   function saveTimes() {
     try { localStorage.setItem(TIMES_KEY, JSON.stringify(settings)); } catch (e) {}
+  }
+  function loadThemePref() {
+    try {
+      var v = localStorage.getItem(THEME_KEY);
+      if (v === 'light' || v === 'dark') return v;
+    } catch (e) {}
+    return 'system';
+  }
+  function effectiveTheme() {
+    if (themePref === 'light' || themePref === 'dark') return themePref;
+    if (!window.matchMedia) return 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  function applyTheme() {
+    var t = effectiveTheme();
+    document.documentElement.setAttribute('data-theme', t);
+    document.documentElement.style.colorScheme = t;
+    var meta = document.getElementById('metaTheme');
+    if (meta) meta.setAttribute('content', t === 'dark' ? '#070b10' : '#eef2f6');
+    if (el.theme) {
+      el.theme.textContent = themePref === 'system' ? 'AUTO' : themePref.toUpperCase();
+      el.theme.setAttribute('aria-label', 'Theme: ' + (themePref === 'system' ? 'follow device' : themePref) + '. Tap to change.');
+    }
+  }
+  function cycleTheme() {
+    themePref = themePref === 'system' ? 'light' : themePref === 'light' ? 'dark' : 'system';
+    try { localStorage.setItem(THEME_KEY, themePref); } catch (e) {}
+    applyTheme();
   }
   function parseDur(str) {
     var t = String(str).trim();
@@ -583,8 +634,8 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     alertEnd();
   });
   el.reset.addEventListener('click', handleReset);
-  el.periodTime.addEventListener('click', function () { startEdit('period'); });
-  el.clockTime.addEventListener('click', function () {
+  el.theme.addEventListener('click', cycleTheme);
+  el.periodTime.addEventListener('click', function () { startEdit('period'); });  el.clockTime.addEventListener('click', function () {
     var k = activeKind();
     if (k) startEdit(k);
   });
@@ -599,11 +650,20 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   });
   document.addEventListener('pointerdown', function () { audio(); });
 
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    var onScheme = function () { if (themePref === 'system') applyTheme(); };
+    if (mq.addEventListener) mq.addEventListener('change', onScheme);
+    else if (mq.addListener) mq.addListener(onScheme);
+  }
+
   window.__jt = {
     get phase() { return phase; },
     get jam() { return jamNo; },
     get periodNo() { return periodNo; },
     get times() { return settings; },
+    get theme() { return themePref; },
+    get effectiveTheme() { return effectiveTheme(); },
     read: function () { return { period: read(period), main: read(main) }; },
     setMain: function (ms) { main.value = Math.max(0, ms); main.anchor = now(); },
     setPeriod: function (ms) { period.value = Math.max(0, ms); period.anchor = now(); },
@@ -611,6 +671,7 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     alert: alertEnd
   };
 
+  applyTheme();
   render();
   requestAnimationFrame(tick);
 })();
