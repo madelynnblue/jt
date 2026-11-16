@@ -89,6 +89,8 @@ body[data-phase="timeout"] .clock{border-color:rgba(255,200,87,.4)}
 body[data-phase="jam"] .clockTime{color:var(--accent)}
 body[data-phase="lineup"] .clockTime{color:var(--blue)}
 body[data-phase="timeout"] .clockTime{color:var(--warn)}
+body[data-phase="jam"] .clockTime.over,
+body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
 .clockSub{font-size:clamp(.7rem,2.7vw,.9rem);color:var(--muted);text-align:center;min-height:1.2em}
 .configLine{display:flex;flex-wrap:wrap;justify-content:center;gap:1px 10px;margin-top:1px}
 .cfg{
@@ -241,6 +243,7 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   var main = { value: settings.jam * 1000, running: false, anchor: 0, mode: 'jam' };
   var editing = null;
   var editValue = 0;
+  var jamAlerted = false;
 
   var lastFrame = 0;
   var resetArmed = false;
@@ -327,9 +330,12 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
 
   function now() { return performance.now(); }
 
+  function raw(c) {
+    if (!c.running) return c.value;
+    return c.value - (now() - c.anchor);
+  }
   function read(c) {
-    if (!c.running) return Math.max(0, c.value);
-    return Math.max(0, c.value - (now() - c.anchor));
+    return Math.max(0, raw(c));
   }
   function start(c) {
     if (c.running) return;
@@ -338,7 +344,7 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   }
   function stop(c) {
     if (!c.running) return;
-    c.value = read(c);
+    c.value = raw(c);
     c.running = false;
   }
   function setMain(mode, ms, running) {
@@ -348,6 +354,11 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   function fmt(ms) {
     var t = Math.ceil(Math.max(0, ms) / 1000);
     return Math.floor(t / 60) + ':' + (t % 60 < 10 ? '0' : '') + (t % 60);
+  }
+  function fmtSigned(ms) {
+    if (ms >= 0) return fmt(ms);
+    var t = Math.ceil(Math.abs(ms) / 1000);
+    return '-' + Math.floor(t / 60) + ':' + (t % 60 < 10 ? '0' : '') + (t % 60);
   }
   function set(node, text) {
     if (node.textContent !== text) node.textContent = text;
@@ -421,14 +432,14 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
       }
     } else if (kind === 'jam') {
       if (phase === 'jam') {
-        main.value = Math.max(0, Math.min(lim, read(main) + delta));
+        main.value = Math.min(lim, raw(main) + delta);
         main.anchor = now();
       } else if (phase === 'ready') {
         main.value = lim;
       }
     } else if (kind === 'lineup') {
       if (phase === 'lineup') {
-        main.value = Math.max(0, Math.min(lim, read(main) + delta));
+        main.value = Math.min(lim, raw(main) + delta);
         main.anchor = now();
       }
     } else if (kind === 'timeout') {
@@ -509,17 +520,17 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
       period = { value: settings.period * 1000, running: false, anchor: 0 };
     }
     jamNo += 1;
+    jamAlerted = false;
     phase = 'jam';
     setMain('jam', settings.jam * 1000, true);
     if (period.value > 0) start(period);
     render();
   }
 
-  function endJam(auto) {
+  function endJam() {
     if (phase !== 'jam') return;
     stopEdit();
     stop(main);
-    if (auto) alertEnd();
     if (read(period) <= 0) { periodOver(); return; }
     phase = 'lineup';
     setMain('lineup', settings.lineup * 1000, true);
@@ -566,6 +577,7 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
 
   function resetAll() {
     stopEdit();
+    jamAlerted = false;
     phase = 'ready';
     periodNo = 1;
     jamNo = 0;
@@ -597,7 +609,7 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     document.body.dataset.phase = phase;
 
     var p = read(period);
-    var m = read(main);
+    var m = raw(main);
 
     set(el.periodTime, fmt(p));
     el.periodTime.classList.toggle('over', p <= 0);
@@ -615,12 +627,14 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
 
     if (phase === 'jam') {
       label = 'JAM CLOCK';
-      sub = 'Jam ' + jamNo + (p <= 0 ? ' · period time expired' : '');
+      sub = 'Jam ' + jamNo;
+      if (m < 0) sub += ' · ' + fmtSigned(m).slice(1) + ' over';
+      if (p <= 0) sub += ' · period time expired';
       plabel = 'END JAM';
       pclass = 'stop';
     } else if (phase === 'lineup') {
       label = 'LINEUP';
-      sub = m <= 0 ? 'Tap start for the next jam' : 'Next jam';
+      sub = m < 0 ? fmtSigned(m).slice(1) + ' over · tap start' : 'Next jam';
       plabel = 'START JAM';
     } else if (phase === 'timeout') {
       label = 'TIMEOUT';
@@ -643,7 +657,8 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     set(el.clockLabel, label);
     if (flashMsg) sub = flashMsg;
     set(el.clockSub, sub);
-    set(el.clockTime, fmt(m));
+    set(el.clockTime, fmtSigned(m));
+    el.clockTime.classList.toggle('over', m < 0);
 
     set(el.cfgJam, fmt(settings.jam * 1000));
     set(el.cfgLineup, fmt(settings.lineup * 1000));
@@ -664,24 +679,24 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     if (t - lastFrame < 50) return;
     lastFrame = t;
 
-    var m = read(main);
+    var m = raw(main);
     var p = read(period);
 
-    if (phase === 'jam' && m <= 0) {
-      endJam(true);
-    } else if (phase === 'lineup' && m <= 0) {
-      stop(main);
-    } else if (phase === 'timeout' && m <= 0) {
-      stop(main);
+    if (phase === 'jam' && m <= 0 && !jamAlerted) {
+      jamAlerted = true;
+      alertEnd();
     }
-
-    if (phase === 'lineup' && read(period) <= 0) periodOver();
+    if (phase === 'timeout' && m <= 0) {
+      main.value = 0;
+      main.running = false;
+    }
+    if (phase === 'lineup' && p <= 0) periodOver();
 
     render();
   }
 
   el.primary.addEventListener('click', function () {
-    if (phase === 'jam') endJam(false);
+    if (phase === 'jam') endJam();
     else if (phase === 'timeout') endTimeout();
     else if (phase === 'done') {
       if (periodNo < PERIODS) startNextPeriod();
@@ -743,7 +758,7 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     get times() { return settings; },
     get theme() { return themePref; },
     get effectiveTheme() { return effectiveTheme(); },
-    read: function () { return { period: read(period), main: read(main) }; },
+    read: function () { return { period: read(period), main: raw(main) }; },
     setMain: function (ms) { main.value = Math.max(0, ms); main.anchor = now(); },
     setPeriod: function (ms) { period.value = Math.max(0, ms); period.anchor = now(); },
     setLength: setLength,

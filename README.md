@@ -5,10 +5,10 @@ Single-screen roller derby jam timer. One HTML file, no build step, no dependenc
 ## What it does
 
 - **Period clock** — 30:00 per period, two periods.
-- **Jam clock** — 2:00 per jam.
-- **Lineup** — 0:30 countdown starts automatically when a jam ends.
+- **Jam clock** — 2:00 per jam, then counts into negative (red) until you press END JAM.
+- **Lineup** — 0:30 countdown starts when a jam ends, then counts into negative (red) until START JAM.
 - **Timeout** — 1:00 countdown; stops the period clock. Available between jams or to end a jam.
-- **START JAM / END JAM** — one big context-sensitive button.
+- **START JAM / END JAM** — one big context-sensitive button. The jam does not auto-end and the lineup does not freeze: both clocks run past 0:00 so you can see how late you are, and the overrun is shown as `-0:01` plus “0:01 over”.
 - **End-of-jam alert** — a quiet two-note chime plus a vibration when the jam clock reaches 0:00. It's for the phone holder, not the players: low gain, no whistle. Keep the phone volume low or use an earbud. **TEST** fires it on demand; a manual END JAM stays silent.
 - **Two-tap RESET** — tap once and the button arms (`SURE?`), tap again to reset the bout.
 - **Every time is editable in place** — tap the period clock, the big jam/lineup/timeout clock, or the small `JAM`/`LINEUP`/`TIMEOUT` values under it. Nudge with −10s/−1s/+1s/+10s (applies live) or type minutes and seconds, then SET. Changes are remembered on the device.
