@@ -213,6 +213,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
       <button class="cfg" data-kind="jam">JAM <b id="cfgJam">2:00</b></button>
       <button class="cfg" data-kind="lineup">LINEUP <b id="cfgLineup">0:30</b></button>
       <button class="cfg" data-kind="timeout">TIMEOUT <b id="cfgTimeout">1:00</b></button>
+      <button class="cfg" data-kind="warn">WARN <b id="cfgWarn">5s</b></button>
     </div>
   </section>
 
@@ -231,8 +232,8 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   var PERIODS = 2;
   var TIMES_KEY = 'jam-timer-times';
   var THEME_KEY = 'jam-timer-theme';
-  var DEFAULTS = { period: 30 * 60, jam: 2 * 60, lineup: 30, timeout: 60 };
-  var KIND_LABELS = { period: 'PERIOD LENGTH', jam: 'JAM LENGTH', lineup: 'LINEUP LENGTH', timeout: 'TIMEOUT LENGTH' };
+  var DEFAULTS = { period: 30 * 60, jam: 2 * 60, lineup: 30, timeout: 60, warn: 5 };
+  var KIND_LABELS = { period: 'PERIOD LENGTH', jam: 'JAM LENGTH', lineup: 'LINEUP LENGTH', timeout: 'TIMEOUT LENGTH', warn: 'LINEUP WARNING' };
   var settings = loadTimes();
   var themePref = loadThemePref();
 
@@ -244,6 +245,8 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   var editing = null;
   var editValue = 0;
   var jamAlerted = false;
+  var lineupAlerted = false;
+  var lineupWarned = false;
 
   var lastFrame = 0;
   var resetArmed = false;
@@ -267,6 +270,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     cfgJam: document.getElementById('cfgJam'),
     cfgLineup: document.getElementById('cfgLineup'),
     cfgTimeout: document.getElementById('cfgTimeout'),
+    cfgWarn: document.getElementById('cfgWarn'),
     editor: document.getElementById('editor'),
     editorLabel: document.getElementById('editorLabel'),
     editMin: document.getElementById('editMin'),
@@ -310,6 +314,11 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   function buzz() {
     if (!navigator.vibrate) return false;
     try { return navigator.vibrate([120, 80, 120, 80, 1100]) !== false; } catch (e) { return false; }
+  }
+
+  function warnHaptic() {
+    if (!navigator.vibrate) return;
+    try { navigator.vibrate([90, 60, 90]); } catch (e) {}
   }
 
   function flash(text) {
@@ -365,13 +374,14 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   }
 
   function loadTimes() {
-    var out = { period: DEFAULTS.period, jam: DEFAULTS.jam, lineup: DEFAULTS.lineup, timeout: DEFAULTS.timeout };
+    var out = { period: DEFAULTS.period, jam: DEFAULTS.jam, lineup: DEFAULTS.lineup, timeout: DEFAULTS.timeout, warn: DEFAULTS.warn };
     try {
       var raw = JSON.parse(localStorage.getItem(TIMES_KEY));
       if (raw && typeof raw === 'object') {
         Object.keys(out).forEach(function (k) {
           var n = parseInt(raw[k], 10);
-          if (isFinite(n) && n >= 1 && n <= 3600) out[k] = n;
+          var lo = k === 'warn' ? 0 : 1;
+          if (isFinite(n) && n >= lo && n <= 3600) out[k] = n;
         });
       }
     } catch (e) {}
@@ -441,6 +451,8 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
       if (phase === 'lineup') {
         main.value = Math.min(lim, raw(main) + delta);
         main.anchor = now();
+        if (raw(main) > 0) lineupAlerted = false;
+        if (raw(main) > settings.warn * 1000) lineupWarned = false;
       }
     } else if (kind === 'timeout') {
       if (phase === 'timeout') {
@@ -459,7 +471,8 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     var s = el.editSec.value === '' ? 0 : parseInt(el.editSec.value, 10);
     if (!isFinite(m) || !isFinite(s) || m < 0 || s < 0) return null;
     var total = m * 60 + s;
-    if (total < 1) return null;
+    if (total < 0) return null;
+    if (total === 0 && editing !== 'warn') return null;
     return Math.min(3600, total);
   }
   function startEdit(kind) {
@@ -507,6 +520,13 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     render();
   }
 
+  function startLineup() {
+    lineupAlerted = false;
+    lineupWarned = false;
+    phase = 'lineup';
+    setMain('lineup', settings.lineup * 1000, true);
+  }
+
   function startJam() {
     stopEdit();
     if (phase === 'done') {
@@ -532,8 +552,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     stopEdit();
     stop(main);
     if (read(period) <= 0) { periodOver(); return; }
-    phase = 'lineup';
-    setMain('lineup', settings.lineup * 1000, true);
+    startLineup();
     render();
   }
 
@@ -549,8 +568,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     stopEdit();
     periodNo += 1;
     period = { value: settings.period * 1000, running: false, anchor: 0 };
-    phase = 'lineup';
-    setMain('lineup', settings.lineup * 1000, true);
+    startLineup();
     render();
   }
 
@@ -570,14 +588,15 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     stopEdit();
     stop(main);
     if (read(period) <= 0) { periodOver(); return; }
-    phase = 'lineup';
-    setMain('lineup', settings.lineup * 1000, true);
+    startLineup();
     render();
   }
 
   function resetAll() {
     stopEdit();
     jamAlerted = false;
+    lineupAlerted = false;
+    lineupWarned = false;
     phase = 'ready';
     periodNo = 1;
     jamNo = 0;
@@ -663,6 +682,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     set(el.cfgJam, fmt(settings.jam * 1000));
     set(el.cfgLineup, fmt(settings.lineup * 1000));
     set(el.cfgTimeout, fmt(settings.timeout * 1000));
+    set(el.cfgWarn, settings.warn > 0 ? settings.warn + 's' : 'OFF');
     var active = activeKind();
     el.cfgJam.parentElement.classList.toggle('active', active === 'jam');
     el.cfgLineup.parentElement.classList.toggle('active', active === 'lineup');
@@ -689,6 +709,15 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     if (phase === 'timeout' && m <= 0) {
       main.value = 0;
       main.running = false;
+    }
+    if (phase === 'lineup') {
+      if (m <= 0 && !lineupAlerted) {
+        lineupAlerted = true;
+        alertEnd();
+      } else if (m > 0 && settings.warn > 0 && m <= settings.warn * 1000 && !lineupWarned) {
+        lineupWarned = true;
+        warnHaptic();
+      }
     }
     if (phase === 'lineup' && p <= 0) periodOver();
 

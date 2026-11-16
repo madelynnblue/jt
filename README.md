@@ -7,11 +7,12 @@ Single-screen roller derby jam timer. One HTML file, no build step, no dependenc
 - **Period clock** — 30:00 per period, two periods.
 - **Jam clock** — 2:00 per jam, then counts into negative (red) until you press END JAM.
 - **Lineup** — 0:30 countdown starts when a jam ends, then counts into negative (red) until START JAM.
+- **Lineup cues** — a short haptic at the configurable warning point (default 5 s; set it to 0 to turn it off) and the chime + haptic when the lineup hits 0:00.
 - **Timeout** — 1:00 countdown; stops the period clock. Available between jams or to end a jam.
 - **START JAM / END JAM** — one big context-sensitive button. The jam does not auto-end and the lineup does not freeze: both clocks run past 0:00 so you can see how late you are, and the overrun is shown as `-0:01` plus “0:01 over”.
-- **End-of-jam alert** — a quiet two-note chime plus a vibration when the jam clock reaches 0:00. It's for the phone holder, not the players: low gain, no whistle. Keep the phone volume low or use an earbud. **TEST** fires it on demand; a manual END JAM stays silent.
+- **End-of-jam alert** — a quiet two-note chime plus a vibration when the jam clock reaches 0:00. It's for the phone holder, not the players: low gain, no whistle. Keep the phone volume low or use an earbud. **TEST** fires it on demand; a manual END JAM stays silent. The same chime + haptic fires when the lineup reaches 0:00.
 - **Two-tap RESET** — tap once and the button arms (`SURE?`), tap again to reset the bout.
-- **Every time is editable in place** — tap the period clock, the big jam/lineup/timeout clock, or the small `JAM`/`LINEUP`/`TIMEOUT` values under it. Nudge with −10s/−1s/+1s/+10s (applies live) or type minutes and seconds, then SET. Changes are remembered on the device.
+- **Every time is editable in place** — tap the period clock, the big jam/lineup/timeout clock, or the small `JAM`/`LINEUP`/`TIMEOUT`/`WARN` values under it. Nudge with −10s/−1s/+1s/+10s (applies live) or type minutes and seconds, then SET. Changes are remembered on the device.
 - **Light / dark theme** — the header button cycles AUTO → LIGHT → DARK. AUTO is the default and follows the device preference; the choice is remembered.
 - The period clock runs through lineup time, stops during timeouts, and stops when it hits 0:00. If it expires mid-jam, the jam plays out and the period ends with it.
 - After period 1 the button becomes **START PERIOD 2**; after period 2 it becomes **NEW BOUT**.
