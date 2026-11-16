@@ -99,17 +99,28 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
 .cfg b{color:var(--text);margin-left:3px;font-weight:800;font-variant-numeric:tabular-nums}
 .cfg.active b{color:var(--accent)}
 .editor{
-  display:flex;align-items:center;gap:8px;padding:7px 10px;
+  display:flex;flex-direction:column;gap:6px;padding:8px 10px;
   border:1px solid var(--line);border-radius:12px;background:var(--panel);
 }
-.editorLabel{font-size:.6rem;font-weight:800;letter-spacing:.1em;color:var(--muted);white-space:nowrap}
-#editorInput{
-  flex:1;min-width:0;padding:7px 8px;border:1px solid var(--line);border-radius:8px;
-  background:var(--panel2);color:var(--text);font-family:var(--mono);font-size:1rem;
-  font-weight:700;text-align:center;
+.editorTop{display:flex;align-items:center;gap:8px}
+.editorLabel{
+  flex:1;min-width:0;font-size:.6rem;font-weight:800;letter-spacing:.1em;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
-#editorInput:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
-.unit{font-size:.62rem;color:var(--muted);font-weight:700;letter-spacing:.05em}
+.editorRow{display:flex;align-items:center;gap:6px}
+.step{
+  flex:1;min-width:0;min-height:42px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel2);color:var(--text);font-size:.72rem;font-weight:800;letter-spacing:.02em;
+}
+.step:active{background:var(--line)}
+.timeFields{display:flex;align-items:center;gap:3px;flex:0 0 auto}
+.timeFields input{
+  width:2.6ch;padding:6px 2px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel2);color:var(--text);font-family:var(--mono);font-size:1.25rem;
+  font-weight:800;text-align:center;
+}
+.timeFields input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.colon{font-family:var(--mono);font-size:1.2rem;font-weight:800;color:var(--muted)}
 .mini{
   padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);
   color:var(--text);font-size:.68rem;font-weight:800;letter-spacing:.06em;
@@ -141,6 +152,20 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   .clockTime{font-size:clamp(3.4rem,min(26vw,30vh),7rem)}
   .primary{min-height:64px}
   .util{min-height:44px}
+  .editor{gap:4px;padding:4px 8px}
+  .editorLabel{font-size:.55rem}
+  .step{min-height:34px;font-size:.62rem}
+  .timeFields input{font-size:1.05rem;padding:4px 2px}
+  .mini{padding:5px 8px}
+  body.editing .clockLabel,
+  body.editing .clockSub{display:none}
+  body.editing .clock{padding:2px 8px}
+  body.editing .clockTime{font-size:clamp(2.4rem,16vh,4.5rem)}
+}
+@media (max-height:700px) and (orientation:portrait){
+  body.editing .clockLabel,
+  body.editing .clockSub{display:none}
+  body.editing .clockTime{font-size:clamp(3rem,20vh,6rem)}
 }
 </style>
 </head>
@@ -160,11 +185,22 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   </section>
 
   <div class="editor" id="editor" hidden>
-    <span class="editorLabel" id="editorLabel">JAM LENGTH</span>
-    <input id="editorInput" type="text" maxlength="5" autocomplete="off" spellcheck="false" aria-label="Time as minutes and seconds">
-    <span class="unit">m:ss</span>
-    <button class="mini" id="editorSet">SET</button>
-    <button class="mini ghost" id="editorCancel" aria-label="Cancel">✕</button>
+    <div class="editorTop">
+      <span class="editorLabel" id="editorLabel">JAM LENGTH</span>
+      <button class="mini" id="editorSet">SET</button>
+      <button class="mini ghost" id="editorCancel" aria-label="Cancel">✕</button>
+    </div>
+    <div class="editorRow">
+      <button class="step" data-delta="-10">−10s</button>
+      <button class="step" data-delta="-1">−1s</button>
+      <div class="timeFields">
+        <input id="editMin" type="text" inputmode="numeric" maxlength="2" aria-label="Minutes">
+        <span class="colon">:</span>
+        <input id="editSec" type="text" inputmode="numeric" maxlength="2" aria-label="Seconds">
+      </div>
+      <button class="step" data-delta="1">+1s</button>
+      <button class="step" data-delta="10">+10s</button>
+    </div>
   </div>
 
   <section class="clock" aria-label="Jam clock">
@@ -204,6 +240,7 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   var period = { value: settings.period * 1000, running: false, anchor: 0 };
   var main = { value: settings.jam * 1000, running: false, anchor: 0, mode: 'jam' };
   var editing = null;
+  var editValue = 0;
 
   var lastFrame = 0;
   var resetArmed = false;
@@ -229,7 +266,8 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     cfgTimeout: document.getElementById('cfgTimeout'),
     editor: document.getElementById('editor'),
     editorLabel: document.getElementById('editorLabel'),
-    editorInput: document.getElementById('editorInput'),
+    editMin: document.getElementById('editMin'),
+    editSec: document.getElementById('editSec'),
     editorSet: document.getElementById('editorSet'),
     editorCancel: document.getElementById('editorCancel'),
     theme: document.getElementById('theme')
@@ -359,24 +397,6 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     try { localStorage.setItem(THEME_KEY, themePref); } catch (e) {}
     applyTheme();
   }
-  function parseDur(str) {
-    var t = String(str).trim();
-    if (!t) return null;
-    var total;
-    if (t.indexOf(':') > -1) {
-      var parts = t.split(':');
-      if (parts.length > 2) return null;
-      var m = parseInt(parts[0], 10);
-      var s = parseInt(parts[1], 10);
-      if (!isFinite(m) || !isFinite(s) || m < 0 || s < 0 || s > 59) return null;
-      total = m * 60 + s;
-    } else {
-      var n = parseInt(t, 10);
-      if (!isFinite(n) || n < 0) return null;
-      total = n;
-    }
-    return (total >= 1 && total <= 3600) ? total : null;
-  }
   function activeKind() {
     if (phase === 'jam' || phase === 'ready') return 'jam';
     if (phase === 'lineup') return 'lineup';
@@ -419,28 +439,56 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     }
     render();
   }
+  function fillEditFields(sec) {
+    el.editMin.value = String(Math.floor(sec / 60));
+    el.editSec.value = (sec % 60 < 10 ? '0' : '') + (sec % 60);
+  }
+  function readFields() {
+    var m = el.editMin.value === '' ? 0 : parseInt(el.editMin.value, 10);
+    var s = el.editSec.value === '' ? 0 : parseInt(el.editSec.value, 10);
+    if (!isFinite(m) || !isFinite(s) || m < 0 || s < 0) return null;
+    var total = m * 60 + s;
+    if (total < 1) return null;
+    return Math.min(3600, total);
+  }
   function startEdit(kind) {
     editing = kind;
+    editValue = settings[kind];
     el.editorLabel.textContent = KIND_LABELS[kind];
-    el.editorInput.value = fmt(settings[kind] * 1000);
+    fillEditFields(editValue);
     el.editor.hidden = false;
     el.configLine.hidden = true;
+    document.body.classList.add('editing');
     setTimeout(function () {
-      try { el.editorInput.focus(); el.editorInput.select(); } catch (e) {}
+      try { el.editMin.focus(); el.editMin.select(); } catch (e) {}
     }, 10);
   }
   function stopEdit() {
     editing = null;
     el.editor.hidden = true;
     el.configLine.hidden = false;
+    document.body.classList.remove('editing');
+    try { el.editMin.blur(); el.editSec.blur(); } catch (e) {}
+  }
+  function nudge(delta) {
+    if (!editing) return;
+    var v = readFields();
+    if (v == null) v = editValue;
+    v = Math.max(1, Math.min(3600, v + delta));
+    editValue = v;
+    setLength(editing, v);
+    fillEditFields(v);
   }
   function commitEdit() {
     if (!editing) return;
+    var v = readFields();
+    if (v == null) {
+      try { el.editMin.focus(); el.editMin.select(); } catch (e) {}
+      return;
+    }
     var kind = editing;
-    var sec = parseDur(el.editorInput.value);
     stopEdit();
-    if (sec != null) setLength(kind, sec);
-    else render();
+    setLength(kind, v);
   }
   function cancelEdit() {
     if (!editing) return;
@@ -644,10 +692,11 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   });
   el.timeout.addEventListener('click', toggleTimeout);
   el.test.addEventListener('click', function () {
-    audio();
+    var has = !!navigator.vibrate;
+    var sent = has ? buzz() : false;
     chime();
-    if (!navigator.vibrate) flash('No vibration API on this browser');
-    else if (!buzz()) flash('Vibration blocked by the browser');
+    if (!has) flash('No vibration API on this browser');
+    else if (!sent) flash('Vibration blocked by the browser');
     else flash('Vibration sent');
   });
   el.reset.addEventListener('click', handleReset);
@@ -662,9 +711,21 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   });
   el.editorSet.addEventListener('click', commitEdit);
   el.editorCancel.addEventListener('click', cancelEdit);
-  el.editorInput.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
-    else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+  Array.prototype.forEach.call(document.querySelectorAll('.step'), function (btn) {
+    btn.addEventListener('click', function () { nudge(parseInt(btn.dataset.delta, 10)); });
+  });
+  [el.editMin, el.editSec].forEach(function (input) {
+    input.addEventListener('input', function () {
+      this.value = this.value.replace(/\D/g, '').slice(0, 2);
+    });
+    input.addEventListener('focus', function () { try { this.select(); } catch (e) {} });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && editing) { e.preventDefault(); cancelEdit(); }
   });
   document.addEventListener('pointerdown', function () { audio(); });
 
