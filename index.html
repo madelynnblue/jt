@@ -86,6 +86,9 @@ body[data-phase="timeout"] .badge{color:var(--warn);border-color:rgba(255,200,87
 .settingsTests{display:flex;gap:8px;margin-top:12px}
 .settingsTests .mini{flex:1;min-height:42px}
 .settingsStatus{min-height:1.1em;font-size:.68rem;color:var(--muted);margin:8px 0 0}
+.soundList{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:8px}
+.soundOpt{display:flex;align-items:center;gap:6px;font-size:.76rem}
+.soundOpt input{width:16px;height:16px;accent-color:var(--accent)}
 
 .period{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -295,12 +298,24 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
       </div>
     </section>
 
+    <section class="cueRow">
+      <div class="cueName">Alert sound <small>tap one to preview — used for jam end and lineup end</small></div>
+      <div class="soundList">
+        <label class="soundOpt"><input type="radio" name="sound" value="chime"> Chime</label>
+        <label class="soundOpt"><input type="radio" name="sound" value="triple"> Triple beep</label>
+        <label class="soundOpt"><input type="radio" name="sound" value="alarm"> Alarm</label>
+        <label class="soundOpt"><input type="radio" name="sound" value="buzzer"> Buzzer</label>
+        <label class="soundOpt"><input type="radio" name="sound" value="horn"> Horn</label>
+        <label class="soundOpt"><input type="radio" name="sound" value="ping"> Ping</label>
+      </div>
+    </section>
+
     <div class="settingsTests">
       <button class="mini" id="settingsTestSound">Test sound</button>
       <button class="mini" id="settingsTestHaptics">Test haptics</button>
     </div>
     <p class="settingsStatus" id="settingsStatus" aria-live="polite"></p>
-    <p class="settingsHint settingsHintSmall">Haptics need Android Chrome — iOS Safari has no vibration API. Sounds are the quiet chime/tick for the phone holder.</p>
+    <p class="settingsHint settingsHintSmall">Haptics need Android Chrome — iOS Safari has no vibration API. Alert sounds are synthesized for the phone holder; the lineup warning tick stays short.</p>
   </div>
 </div>
 
@@ -316,7 +331,10 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   var settings = loadTimes();
   var themePref = loadThemePref();
   var CUES_KEY = 'jam-timer-cues';
+  var SOUND_KEY = 'jam-timer-sound';
+  var SOUNDS = ['chime', 'triple', 'alarm', 'buzzer', 'horn', 'ping'];
   var cues = loadCues();
+  var soundId = loadSound();
 
   var phase = 'ready';
   var periodNo = 1;
@@ -375,24 +393,47 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     return actx;
   }
 
-  function chime() {
+  function tone(at, freq, dur, type, level) {
+    var a = audio();
+    if (!a) return;
+    var o = a.createOscillator();
+    var g = a.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, at);
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(level, at + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g);
+    g.connect(a.destination);
+    o.start(at);
+    o.stop(at + dur + 0.02);
+  }
+
+  function playSound(id) {
     var a = audio();
     if (!a) return;
     var t = a.currentTime + 0.02;
-    var notes = [880, 1174];
-    for (var i = 0; i < notes.length; i++) {
-      var at = t + i * 0.18;
-      var o = a.createOscillator();
-      var g = a.createGain();
-      o.type = 'sine';
-      o.frequency.value = notes[i];
-      g.gain.setValueAtTime(0.0001, at);
-      g.gain.exponentialRampToValueAtTime(0.12, at + 0.012);
-      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.17);
-      o.connect(g);
-      g.connect(a.destination);
-      o.start(at);
-      o.stop(at + 0.19);
+    if (id === 'triple') {
+      tone(t, 1174, 0.09, 'square', 0.09);
+      tone(t + 0.12, 1174, 0.09, 'square', 0.09);
+      tone(t + 0.24, 1174, 0.14, 'square', 0.09);
+    } else if (id === 'alarm') {
+      tone(t, 988, 0.10, 'square', 0.09);
+      tone(t + 0.12, 740, 0.10, 'square', 0.09);
+      tone(t + 0.24, 988, 0.10, 'square', 0.09);
+      tone(t + 0.36, 740, 0.10, 'square', 0.09);
+      tone(t + 0.48, 988, 0.16, 'square', 0.09);
+    } else if (id === 'buzzer') {
+      tone(t, 170, 0.55, 'sawtooth', 0.11);
+      tone(t, 213, 0.55, 'sawtooth', 0.06);
+    } else if (id === 'horn') {
+      tone(t, 330, 0.28, 'sawtooth', 0.11);
+      tone(t + 0.02, 392, 0.26, 'sawtooth', 0.06);
+    } else if (id === 'ping') {
+      tone(t, 1568, 0.45, 'sine', 0.13);
+    } else {
+      tone(t, 880, 0.17, 'sine', 0.12);
+      tone(t + 0.18, 1174, 0.17, 'sine', 0.12);
     }
   }
 
@@ -437,12 +478,12 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
 
   function cueJamEnd() {
     if (cues.jamEnd.haptics) buzz();
-    if (cues.jamEnd.sound) chime();
+    if (cues.jamEnd.sound) playSound(soundId);
   }
 
   function cueLineupEnd() {
     if (cues.lineupEnd.haptics) buzz();
-    if (cues.lineupEnd.sound) chime();
+    if (cues.lineupEnd.sound) playSound(soundId);
   }
 
   function now() { return performance.now(); }
@@ -520,6 +561,16 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   function saveCues() {
     try { localStorage.setItem(CUES_KEY, JSON.stringify(cues)); } catch (e) {}
   }
+  function loadSound() {
+    try {
+      var v = localStorage.getItem(SOUND_KEY);
+      if (SOUNDS.indexOf(v) > -1) return v;
+    } catch (e) {}
+    return 'chime';
+  }
+  function saveSound() {
+    try { localStorage.setItem(SOUND_KEY, soundId); } catch (e) {}
+  }
   function loadThemePref() {
     try {
       var v = localStorage.getItem(THEME_KEY);
@@ -546,6 +597,9 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   function openSettings() {
     Array.prototype.forEach.call(document.querySelectorAll('#settings [data-cue][data-kind]'), function (cb) {
       cb.checked = cues[cb.dataset.cue][cb.dataset.kind] !== false;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#settings input[name="sound"]'), function (r) {
+      r.checked = r.value === soundId;
     });
     el.settingsStatus.textContent = '';
     el.settings.hidden = false;
@@ -880,6 +934,12 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   el.settings.addEventListener('click', function (e) { if (e.target === el.settings) closeSettings(); });
   el.settings.addEventListener('change', function (e) {
     var t = e.target;
+    if (t.name === 'sound') {
+      soundId = t.value;
+      saveSound();
+      playSound(soundId);
+      return;
+    }
     if (!t.dataset.cue || !t.dataset.kind) return;
     cues[t.dataset.cue][t.dataset.kind] = t.checked;
     saveCues();
@@ -887,7 +947,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   el.settingsTestSound.addEventListener('click', function () {
     var a = audio();
     if (!a) { el.settingsStatus.textContent = 'Audio unavailable'; return; }
-    chime();
+    playSound(soundId);
     el.settingsStatus.textContent = 'Sound played';
   });
   el.settingsTestHaptics.addEventListener('click', function () {
@@ -946,7 +1006,8 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     setPeriod: function (ms) { period.value = Math.max(0, ms); period.anchor = now(); },
     setLength: setLength,
     get cues() { return cues; },
-    alert: function () { buzz(); chime(); }
+    get sound() { return soundId; },
+    alert: function () { buzz(); playSound(soundId); }
   };
 
   applyTheme();
