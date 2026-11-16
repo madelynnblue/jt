@@ -8,6 +8,7 @@ Single-screen roller derby jam timer. One HTML file, no build step, no dependenc
 - **Jam clock** — 2:00 per jam, then counts into negative (red) until you press END JAM.
 - **Lineup** — 0:30 countdown starts when a jam ends, then counts into negative (red) until START JAM.
 - **Lineup cues** — at the configurable five-second call (default 5 s; set it to 0 to turn it off) a 1.1 s haptic, a quiet tick and a clock pulse; at 0:00 the chime + haptic alert.
+- **Cue settings** — the gear button opens a small panel with Sound and Haptics switches for jam end, lineup warning, and lineup end. Choices are saved on the device; the TEST button always fires both.
 - **Timeout** — 1:00 countdown; stops the period clock. Available between jams or to end a jam.
 - **START JAM / END JAM** — one big context-sensitive button. The jam does not auto-end and the lineup does not freeze: both clocks run past 0:00 so you can see how late you are, and the overrun is shown as `-0:01` plus “0:01 over”.
 - **End-of-jam alert** — a quiet two-note chime plus a vibration when the jam clock reaches 0:00. It's for the phone holder, not the players: low gain, no whistle. Keep the phone volume low or use an earbud. **TEST** fires it on demand; a manual END JAM stays silent. The same chime + haptic fires when the lineup reaches 0:00.

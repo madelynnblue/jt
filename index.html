@@ -58,6 +58,33 @@ body[data-phase="timeout"] .badge{color:var(--warn);border-color:rgba(255,200,87
   font-size:.55rem;font-weight:800;letter-spacing:.1em;padding:5px 7px;line-height:1;
 }
 .themeBtn:active{background:var(--panel)}
+.gearBtn{
+  flex:0 0 auto;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:8px;background:none;color:var(--muted);padding:0;
+}
+.gearBtn svg{width:16px;height:16px}
+.gearBtn:active{background:var(--panel)}
+#settings{
+  position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.55);
+  display:flex;align-items:center;justify-content:center;padding:16px;
+}
+.settingsCard{
+  width:100%;max-width:380px;max-height:calc(100dvh - 32px);overflow:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;
+}
+.settingsHead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.settingsHead h2{font-size:1rem;margin:0}
+.settingsHint{font-size:.7rem;line-height:1.45;color:var(--muted);margin:6px 0 10px}
+.settingsHintSmall{font-size:.63rem;margin-top:10px;margin-bottom:0}
+.cueRow{border-top:1px solid var(--line);padding:10px 0}
+.cueRow:first-of-type{border-top:0}
+.cueName{font-size:.8rem;font-weight:800}
+.cueName small{display:block;font-size:.63rem;font-weight:500;color:var(--muted);margin-top:2px}
+.cueChecks{display:flex;gap:20px;margin-top:8px}
+.cueChecks label{display:flex;align-items:center;gap:7px;font-size:.8rem}
+.cueChecks input{width:19px;height:19px;accent-color:var(--accent)}
+.settingsTests{display:flex;gap:8px;margin-top:12px}
+.settingsTests .mini{flex:1;min-height:42px}
 
 .period{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -183,6 +210,12 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     <span class="headerEnd">
       <span class="meta"><b id="periodMeta">PERIOD 1/2</b> · <span id="jamMeta">JAM 0</span></span>
       <button id="theme" class="themeBtn" aria-label="Theme: follow device">AUTO</button>
+      <button id="settingsBtn" class="gearBtn" aria-label="Cue settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h9M17 7h3M4 17h3M11 17h9"/>
+          <circle cx="15" cy="7" r="2.1"/><circle cx="9" cy="17" r="2.1"/>
+        </svg>
+      </button>
     </span>
   </header>
 
@@ -230,6 +263,46 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   </div>
 </main>
 
+<div id="settings" hidden>
+  <div class="settingsCard" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="settingsHead">
+      <h2 id="settingsTitle">Cue settings</h2>
+      <button id="settingsClose" class="mini ghost" aria-label="Close settings">✕</button>
+    </div>
+    <p class="settingsHint">Sound and haptics for each cue. The TEST button always fires both.</p>
+
+    <section class="cueRow">
+      <div class="cueName">Jam end <small>when the jam clock hits 0:00</small></div>
+      <div class="cueChecks">
+        <label><input type="checkbox" data-cue="jamEnd" data-kind="sound"> Sound</label>
+        <label><input type="checkbox" data-cue="jamEnd" data-kind="haptics"> Haptics</label>
+      </div>
+    </section>
+
+    <section class="cueRow">
+      <div class="cueName">Lineup warning <small>at the WARN point — the clock pulse always shows</small></div>
+      <div class="cueChecks">
+        <label><input type="checkbox" data-cue="lineupWarn" data-kind="sound"> Sound</label>
+        <label><input type="checkbox" data-cue="lineupWarn" data-kind="haptics"> Haptics</label>
+      </div>
+    </section>
+
+    <section class="cueRow">
+      <div class="cueName">Lineup end <small>when the lineup hits 0:00</small></div>
+      <div class="cueChecks">
+        <label><input type="checkbox" data-cue="lineupEnd" data-kind="sound"> Sound</label>
+        <label><input type="checkbox" data-cue="lineupEnd" data-kind="haptics"> Haptics</label>
+      </div>
+    </section>
+
+    <div class="settingsTests">
+      <button class="mini" id="settingsTestSound">Test sound</button>
+      <button class="mini" id="settingsTestHaptics">Test haptics</button>
+    </div>
+    <p class="settingsHint settingsHintSmall">Haptics need Android Chrome — iOS Safari has no vibration API. Sounds are the quiet chime/tick for the phone holder.</p>
+  </div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -241,6 +314,8 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   var KIND_LABELS = { period: 'PERIOD LENGTH', jam: 'JAM LENGTH', lineup: 'LINEUP LENGTH', timeout: 'TIMEOUT LENGTH', warn: 'LINEUP WARNING' };
   var settings = loadTimes();
   var themePref = loadThemePref();
+  var CUES_KEY = 'jam-timer-cues';
+  var cues = loadCues();
 
   var phase = 'ready';
   var periodNo = 1;
@@ -283,7 +358,12 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     editSec: document.getElementById('editSec'),
     editorSet: document.getElementById('editorSet'),
     editorCancel: document.getElementById('editorCancel'),
-    theme: document.getElementById('theme')
+    theme: document.getElementById('theme'),
+    settings: document.getElementById('settings'),
+    settingsBtn: document.getElementById('settingsBtn'),
+    settingsClose: document.getElementById('settingsClose'),
+    settingsTestSound: document.getElementById('settingsTestSound'),
+    settingsTestHaptics: document.getElementById('settingsTestHaptics')
   };
 
   var actx = null;
@@ -346,8 +426,8 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
 
   function cueWarning() {
     lineupWarned = true;
-    warnHaptic();
-    tickSound();
+    if (cues.lineupWarn.haptics) warnHaptic();
+    if (cues.lineupWarn.sound) tickSound();
     var c = el.clock;
     if (!c) return;
     c.classList.remove('cue');
@@ -367,9 +447,14 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     render();
   }
 
-  function alertEnd() {
-    buzz();
-    chime();
+  function cueJamEnd() {
+    if (cues.jamEnd.haptics) buzz();
+    if (cues.jamEnd.sound) chime();
+  }
+
+  function cueLineupEnd() {
+    if (cues.lineupEnd.haptics) buzz();
+    if (cues.lineupEnd.sound) chime();
   }
 
   function now() { return performance.now(); }
@@ -425,6 +510,28 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   function saveTimes() {
     try { localStorage.setItem(TIMES_KEY, JSON.stringify(settings)); } catch (e) {}
   }
+  function loadCues() {
+    var d = {
+      jamEnd: { sound: true, haptics: true },
+      lineupWarn: { sound: true, haptics: true },
+      lineupEnd: { sound: true, haptics: true }
+    };
+    try {
+      var raw = JSON.parse(localStorage.getItem(CUES_KEY));
+      if (raw && typeof raw === 'object') {
+        Object.keys(d).forEach(function (k) {
+          if (raw[k] && typeof raw[k] === 'object') {
+            if (raw[k].sound === false) d[k].sound = false;
+            if (raw[k].haptics === false) d[k].haptics = false;
+          }
+        });
+      }
+    } catch (e) {}
+    return d;
+  }
+  function saveCues() {
+    try { localStorage.setItem(CUES_KEY, JSON.stringify(cues)); } catch (e) {}
+  }
   function loadThemePref() {
     try {
       var v = localStorage.getItem(THEME_KEY);
@@ -447,6 +554,15 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
       el.theme.textContent = themePref === 'system' ? 'AUTO' : themePref.toUpperCase();
       el.theme.setAttribute('aria-label', 'Theme: ' + (themePref === 'system' ? 'follow device' : themePref) + '. Tap to change.');
     }
+  }
+  function openSettings() {
+    Array.prototype.forEach.call(document.querySelectorAll('#settings [data-cue][data-kind]'), function (cb) {
+      cb.checked = cues[cb.dataset.cue][cb.dataset.kind] !== false;
+    });
+    el.settings.hidden = false;
+  }
+  function closeSettings() {
+    el.settings.hidden = true;
   }
   function cycleTheme() {
     themePref = themePref === 'system' ? 'light' : themePref === 'light' ? 'dark' : 'system';
@@ -739,7 +855,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
 
     if (phase === 'jam' && m <= 0 && !jamAlerted) {
       jamAlerted = true;
-      alertEnd();
+      cueJamEnd();
     }
     if (phase === 'timeout' && m <= 0) {
       main.value = 0;
@@ -748,7 +864,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     if (phase === 'lineup') {
       if (m <= 0 && !lineupAlerted) {
         lineupAlerted = true;
-        alertEnd();
+        cueLineupEnd();
       } else if (m > 0 && settings.warn > 0 && m <= settings.warn * 1000 && !lineupWarned) {
         cueWarning();
       }
@@ -779,6 +895,17 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   });
   el.reset.addEventListener('click', handleReset);
   el.theme.addEventListener('click', cycleTheme);
+  el.settingsBtn.addEventListener('click', openSettings);
+  el.settingsClose.addEventListener('click', closeSettings);
+  el.settings.addEventListener('click', function (e) { if (e.target === el.settings) closeSettings(); });
+  el.settings.addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t.dataset.cue || !t.dataset.kind) return;
+    cues[t.dataset.cue][t.dataset.kind] = t.checked;
+    saveCues();
+  });
+  el.settingsTestSound.addEventListener('click', function () { chime(); });
+  el.settingsTestHaptics.addEventListener('click', function () { buzz(); });
   el.periodTime.addEventListener('click', function () { startEdit('period'); });
   el.clockTime.addEventListener('click', function () {
     var k = activeKind();
@@ -803,7 +930,9 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     });
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && editing) { e.preventDefault(); cancelEdit(); }
+    if (e.key !== 'Escape') return;
+    if (!el.settings.hidden) { el.settings.hidden = true; return; }
+    if (editing) { e.preventDefault(); cancelEdit(); }
   });
   document.addEventListener('pointerdown', function () { audio(); });
 
@@ -825,7 +954,8 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     setMain: function (ms) { main.value = Math.max(0, ms); main.anchor = now(); },
     setPeriod: function (ms) { period.value = Math.max(0, ms); period.anchor = now(); },
     setLength: setLength,
-    alert: alertEnd
+    get cues() { return cues; },
+    alert: function () { buzz(); chime(); }
   };
 
   applyTheme();
