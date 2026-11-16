@@ -85,6 +85,7 @@ body[data-phase="timeout"] .badge{color:var(--warn);border-color:rgba(255,200,87
 .cueChecks input{width:19px;height:19px;accent-color:var(--accent)}
 .settingsTests{display:flex;gap:8px;margin-top:12px}
 .settingsTests .mini{flex:1;min-height:42px}
+.settingsStatus{min-height:1.1em;font-size:.68rem;color:var(--muted);margin:8px 0 0}
 
 .period{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -258,7 +259,6 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   <button id="primary" class="primary go">START JAM</button>
   <div class="row">
     <button id="timeout" class="util" disabled>TIMEOUT</button>
-    <button id="test" class="util" aria-label="Test end-of-jam alert">TEST</button>
     <button id="reset" class="util">RESET</button>
   </div>
 </main>
@@ -269,7 +269,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
       <h2 id="settingsTitle">Cue settings</h2>
       <button id="settingsClose" class="mini ghost" aria-label="Close settings">✕</button>
     </div>
-    <p class="settingsHint">Sound and haptics for each cue. The TEST button always fires both.</p>
+    <p class="settingsHint">Sound and haptics for each cue. The test buttons below always fire, regardless of these switches.</p>
 
     <section class="cueRow">
       <div class="cueName">Jam end <small>when the jam clock hits 0:00</small></div>
@@ -299,6 +299,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
       <button class="mini" id="settingsTestSound">Test sound</button>
       <button class="mini" id="settingsTestHaptics">Test haptics</button>
     </div>
+    <p class="settingsStatus" id="settingsStatus" aria-live="polite"></p>
     <p class="settingsHint settingsHintSmall">Haptics need Android Chrome — iOS Safari has no vibration API. Sounds are the quiet chime/tick for the phone holder.</p>
   </div>
 </div>
@@ -331,8 +332,6 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
   var lastFrame = 0;
   var resetArmed = false;
   var resetTimer = null;
-  var flashMsg = null;
-  var flashTimer = null;
 
   var el = {
     badge: document.getElementById('phase'),
@@ -345,7 +344,6 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     clockSub: document.getElementById('clockSub'),
     primary: document.getElementById('primary'),
     timeout: document.getElementById('timeout'),
-    test: document.getElementById('test'),
     reset: document.getElementById('reset'),
     configLine: document.getElementById('configLine'),
     cfgJam: document.getElementById('cfgJam'),
@@ -363,7 +361,8 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     settingsBtn: document.getElementById('settingsBtn'),
     settingsClose: document.getElementById('settingsClose'),
     settingsTestSound: document.getElementById('settingsTestSound'),
-    settingsTestHaptics: document.getElementById('settingsTestHaptics')
+    settingsTestHaptics: document.getElementById('settingsTestHaptics'),
+    settingsStatus: document.getElementById('settingsStatus')
   };
 
   var actx = null;
@@ -434,17 +433,6 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     void c.offsetWidth;
     c.classList.add('cue');
     setTimeout(function () { c.classList.remove('cue'); }, 1100);
-  }
-
-  function flash(text) {
-    flashMsg = text;
-    if (flashTimer) clearTimeout(flashTimer);
-    flashTimer = setTimeout(function () {
-      flashMsg = null;
-      flashTimer = null;
-      render();
-    }, 2600);
-    render();
   }
 
   function cueJamEnd() {
@@ -559,6 +547,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     Array.prototype.forEach.call(document.querySelectorAll('#settings [data-cue][data-kind]'), function (cb) {
       cb.checked = cues[cb.dataset.cue][cb.dataset.kind] !== false;
     });
+    el.settingsStatus.textContent = '';
     el.settings.hidden = false;
   }
   function closeSettings() {
@@ -825,7 +814,6 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     }
 
     set(el.clockLabel, label);
-    if (flashMsg) sub = flashMsg;
     set(el.clockSub, sub);
     set(el.clockTime, fmtSigned(m));
     el.clockTime.classList.toggle('over', m < 0);
@@ -885,14 +873,6 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     }
   });
   el.timeout.addEventListener('click', toggleTimeout);
-  el.test.addEventListener('click', function () {
-    var has = !!navigator.vibrate;
-    var sent = has ? buzz() : false;
-    chime();
-    if (!has) flash('No vibration API on this browser');
-    else if (!sent) flash('Vibration blocked by the browser');
-    else flash('Vibration sent — check silent/DND');
-  });
   el.reset.addEventListener('click', handleReset);
   el.theme.addEventListener('click', cycleTheme);
   el.settingsBtn.addEventListener('click', openSettings);
@@ -904,8 +884,19 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     cues[t.dataset.cue][t.dataset.kind] = t.checked;
     saveCues();
   });
-  el.settingsTestSound.addEventListener('click', function () { chime(); });
-  el.settingsTestHaptics.addEventListener('click', function () { buzz(); });
+  el.settingsTestSound.addEventListener('click', function () {
+    var a = audio();
+    if (!a) { el.settingsStatus.textContent = 'Audio unavailable'; return; }
+    chime();
+    el.settingsStatus.textContent = 'Sound played';
+  });
+  el.settingsTestHaptics.addEventListener('click', function () {
+    var has = !!navigator.vibrate;
+    var sent = has ? buzz() : false;
+    if (!has) el.settingsStatus.textContent = 'No vibration API on this browser';
+    else if (!sent) el.settingsStatus.textContent = 'Vibration blocked by the browser';
+    else el.settingsStatus.textContent = 'Vibration sent — check silent/DND';
+  });
   el.periodTime.addEventListener('click', function () { startEdit('period'); });
   el.clockTime.addEventListener('click', function () {
     var k = activeKind();
