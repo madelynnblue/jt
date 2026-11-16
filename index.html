@@ -306,7 +306,7 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
 
   function buzz() {
     if (!navigator.vibrate) return false;
-    try { return navigator.vibrate([120, 80, 120, 80, 320]) !== false; } catch (e) { return false; }
+    try { return navigator.vibrate([120, 80, 120, 80, 1100]) !== false; } catch (e) { return false; }
   }
 
   function flash(text) {
@@ -697,7 +697,7 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     chime();
     if (!has) flash('No vibration API on this browser');
     else if (!sent) flash('Vibration blocked by the browser');
-    else flash('Vibration sent');
+    else flash('Vibration sent — check silent/DND');
   });
   el.reset.addEventListener('click', handleReset);
   el.theme.addEventListener('click', cycleTheme);
