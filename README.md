@@ -18,7 +18,7 @@ Single-screen roller derby jam timer. One HTML file, no build step, no dependenc
 
 Defaults are WFTDA: 2×30:00 periods, 2:00 jams, 0:30 lineup, 1:00 timeout. The four times and the theme choice are saved in `localStorage`; the bout itself is not, so reloading starts a fresh bout with your saved times.
 
-Phone notes: iOS mutes Web Audio when the ringer switch is off and has no vibration API, so the chime may be silent and TEST will only feel like a no-op there. Android generally supports both, and the audio must be unlocked by a tap (the first button press does that).
+Phone notes: iOS has no Vibration API at all — TEST will say “No vibration API on this browser” — and the ringer switch mutes Web Audio. Android supports both; if TEST says “Vibration blocked by the browser”, check the device/browser vibration settings. Audio needs a tap to unlock (the first button press does that).
 
 ## Run
 

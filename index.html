@@ -208,6 +208,8 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   var lastFrame = 0;
   var resetArmed = false;
   var resetTimer = null;
+  var flashMsg = null;
+  var flashTimer = null;
 
   var el = {
     badge: document.getElementById('phase'),
@@ -265,8 +267,19 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   }
 
   function buzz() {
-    if (!navigator.vibrate) return;
-    try { navigator.vibrate([70, 50, 70, 50, 180]); } catch(e) {}
+    if (!navigator.vibrate) return false;
+    try { return navigator.vibrate([120, 80, 120, 80, 320]) !== false; } catch (e) { return false; }
+  }
+
+  function flash(text) {
+    flashMsg = text;
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = setTimeout(function () {
+      flashMsg = null;
+      flashTimer = null;
+      render();
+    }, 2600);
+    render();
   }
 
   function alertEnd() {
@@ -580,6 +593,7 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     }
 
     set(el.clockLabel, label);
+    if (flashMsg) sub = flashMsg;
     set(el.clockSub, sub);
     set(el.clockTime, fmt(m));
 
@@ -631,11 +645,15 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   el.timeout.addEventListener('click', toggleTimeout);
   el.test.addEventListener('click', function () {
     audio();
-    alertEnd();
+    chime();
+    if (!navigator.vibrate) flash('No vibration API on this browser');
+    else if (!buzz()) flash('Vibration blocked by the browser');
+    else flash('Vibration sent');
   });
   el.reset.addEventListener('click', handleReset);
   el.theme.addEventListener('click', cycleTheme);
-  el.periodTime.addEventListener('click', function () { startEdit('period'); });  el.clockTime.addEventListener('click', function () {
+  el.periodTime.addEventListener('click', function () { startEdit('period'); });
+  el.clockTime.addEventListener('click', function () {
     var k = activeKind();
     if (k) startEdit(k);
   });
