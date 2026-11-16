@@ -11,10 +11,11 @@ Single-screen roller derby jam timer. One HTML file, no build step, no dependenc
 - **START JAM / END JAM** — one big context-sensitive button.
 - **End-of-jam alert** — a quiet two-note chime plus a vibration when the jam clock reaches 0:00. It's for the phone holder, not the players: low gain, no whistle. Keep the phone volume low or use an earbud. **TEST** fires it on demand; a manual END JAM stays silent.
 - **Two-tap RESET** — tap once and the button arms (`SURE?`), tap again to reset the bout.
+- **Every time is editable in place** — tap the period clock, the big jam/lineup/timeout clock, or the small `JAM`/`LINEUP`/`TIMEOUT` values under it. Type `m:ss` (or plain seconds) and press SET. Changes apply immediately and are remembered on the device.
 - The period clock runs through lineup time, stops during timeouts, and stops when it hits 0:00. If it expires mid-jam, the jam plays out and the period ends with it.
 - After period 1 the button becomes **START PERIOD 2**; after period 2 it becomes **NEW BOUT**.
 
-Hardcoded WFTDA defaults on purpose: no settings, presets, score, or storage. Reloading the page starts a fresh bout.
+Defaults are WFTDA: 2×30:00 periods, 2:00 jams, 0:30 lineup, 1:00 timeout. The four times are saved in `localStorage`; the bout itself is not, so reloading starts a fresh bout with your saved times.
 
 Phone notes: iOS mutes Web Audio when the ringer switch is off and has no vibration API, so the chime may be silent and TEST will only feel like a no-op there. Android generally supports both, and the audio must be unlocked by a tap (the first button press does that).
 

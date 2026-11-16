@@ -8,6 +8,7 @@
 <title>Jam Timer</title>
 <style>
 *,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
 :root{
   --bg:#070b10;--panel:#101923;--line:#22303f;--text:#eef5fb;--muted:#8ea4b7;
   --go:#2fd18a;--goInk:#03251a;--stop:#ff4d61;--stopInk:#fff;
@@ -49,6 +50,8 @@ body[data-phase="timeout"] .badge{color:var(--warn);border-color:rgba(255,200,87
 .periodTime{
   font-family:var(--mono);font-size:clamp(1.6rem,7vw,2.4rem);font-weight:800;
   letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1;
+  background:none;border:0;border-bottom:2px dotted var(--line);color:var(--text);
+  padding:1px 2px;cursor:pointer;
 }
 .periodTime.over{color:var(--stop)}
 
@@ -64,11 +67,37 @@ body[data-phase="timeout"] .clock{border-color:rgba(255,200,87,.4)}
 .clockTime{
   font-family:var(--mono);font-weight:800;line-height:.9;letter-spacing:-.05em;
   font-variant-numeric:tabular-nums;font-size:clamp(5rem,min(34vw,32vh),14rem);white-space:nowrap;
+  background:none;border:0;padding:0;color:inherit;cursor:pointer;
 }
 body[data-phase="jam"] .clockTime{color:var(--accent)}
 body[data-phase="lineup"] .clockTime{color:var(--blue)}
 body[data-phase="timeout"] .clockTime{color:var(--warn)}
 .clockSub{font-size:clamp(.7rem,2.7vw,.9rem);color:var(--muted);text-align:center;min-height:1.2em}
+.configLine{display:flex;flex-wrap:wrap;justify-content:center;gap:1px 10px;margin-top:1px}
+.cfg{
+  background:none;border:0;border-bottom:1px dotted var(--line);color:var(--muted);
+  font:inherit;font-size:clamp(.56rem,2.2vw,.68rem);font-weight:700;letter-spacing:.05em;
+  padding:2px 0;cursor:pointer;
+}
+.cfg b{color:var(--text);margin-left:3px;font-weight:800;font-variant-numeric:tabular-nums}
+.cfg.active b{color:var(--accent)}
+.editor{
+  display:flex;align-items:center;gap:8px;padding:7px 10px;
+  border:1px solid var(--line);border-radius:12px;background:var(--panel);
+}
+.editorLabel{font-size:.6rem;font-weight:800;letter-spacing:.1em;color:var(--muted);white-space:nowrap}
+#editorInput{
+  flex:1;min-width:0;padding:7px 8px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel2);color:var(--text);font-family:var(--mono);font-size:1rem;
+  font-weight:700;text-align:center;
+}
+#editorInput:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.unit{font-size:.62rem;color:var(--muted);font-weight:700;letter-spacing:.05em}
+.mini{
+  padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);
+  color:var(--text);font-size:.68rem;font-weight:800;letter-spacing:.06em;
+}
+.mini.ghost{background:transparent;color:var(--muted)}
 
 .primary{
   width:100%;min-height:clamp(70px,12vh,96px);border:0;border-radius:18px;
@@ -107,13 +136,26 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
 
   <section class="period" aria-label="Period clock">
     <span class="lbl">PERIOD</span>
-    <span id="periodTime" class="periodTime">30:00</span>
+    <button id="periodTime" class="periodTime" aria-label="Set period length">30:00</button>
   </section>
+
+  <div class="editor" id="editor" hidden>
+    <span class="editorLabel" id="editorLabel">JAM LENGTH</span>
+    <input id="editorInput" type="text" maxlength="5" autocomplete="off" spellcheck="false" aria-label="Time as minutes and seconds">
+    <span class="unit">m:ss</span>
+    <button class="mini" id="editorSet">SET</button>
+    <button class="mini ghost" id="editorCancel" aria-label="Cancel">✕</button>
+  </div>
 
   <section class="clock" aria-label="Jam clock">
     <div id="clockLabel" class="clockLabel">JAM CLOCK</div>
-    <div id="clockTime" class="clockTime">2:00</div>
+    <button id="clockTime" class="clockTime" aria-label="Set jam length">2:00</button>
     <div id="clockSub" class="clockSub">Tap start</div>
+    <div class="configLine" id="configLine">
+      <button class="cfg" data-kind="jam">JAM <b id="cfgJam">2:00</b></button>
+      <button class="cfg" data-kind="lineup">LINEUP <b id="cfgLineup">0:30</b></button>
+      <button class="cfg" data-kind="timeout">TIMEOUT <b id="cfgTimeout">1:00</b></button>
+    </div>
   </section>
 
   <button id="primary" class="primary go">START JAM</button>
@@ -128,17 +170,18 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
 (function () {
   'use strict';
 
-  var PERIOD_MS = 30 * 60 * 1000;
-  var JAM_MS = 2 * 60 * 1000;
-  var LINEUP_MS = 30 * 1000;
-  var TIMEOUT_MS = 60 * 1000;
   var PERIODS = 2;
+  var TIMES_KEY = 'jam-timer-times';
+  var DEFAULTS = { period: 30 * 60, jam: 2 * 60, lineup: 30, timeout: 60 };
+  var KIND_LABELS = { period: 'PERIOD LENGTH', jam: 'JAM LENGTH', lineup: 'LINEUP LENGTH', timeout: 'TIMEOUT LENGTH' };
+  var settings = loadTimes();
 
   var phase = 'ready';
   var periodNo = 1;
   var jamNo = 0;
-  var period = { value: PERIOD_MS, running: false, anchor: 0 };
-  var main = { value: JAM_MS, running: false, anchor: 0, mode: 'jam' };
+  var period = { value: settings.period * 1000, running: false, anchor: 0 };
+  var main = { value: settings.jam * 1000, running: false, anchor: 0, mode: 'jam' };
+  var editing = null;
 
   var lastFrame = 0;
   var resetArmed = false;
@@ -155,7 +198,16 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     primary: document.getElementById('primary'),
     timeout: document.getElementById('timeout'),
     test: document.getElementById('test'),
-    reset: document.getElementById('reset')
+    reset: document.getElementById('reset'),
+    configLine: document.getElementById('configLine'),
+    cfgJam: document.getElementById('cfgJam'),
+    cfgLineup: document.getElementById('cfgLineup'),
+    cfgTimeout: document.getElementById('cfgTimeout'),
+    editor: document.getElementById('editor'),
+    editorLabel: document.getElementById('editorLabel'),
+    editorInput: document.getElementById('editorInput'),
+    editorSet: document.getElementById('editorSet'),
+    editorCancel: document.getElementById('editorCancel')
   };
 
   var actx = null;
@@ -227,7 +279,113 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     if (node.textContent !== text) node.textContent = text;
   }
 
+  function loadTimes() {
+    var out = { period: DEFAULTS.period, jam: DEFAULTS.jam, lineup: DEFAULTS.lineup, timeout: DEFAULTS.timeout };
+    try {
+      var raw = JSON.parse(localStorage.getItem(TIMES_KEY));
+      if (raw && typeof raw === 'object') {
+        Object.keys(out).forEach(function (k) {
+          var n = parseInt(raw[k], 10);
+          if (isFinite(n) && n >= 1 && n <= 3600) out[k] = n;
+        });
+      }
+    } catch (e) {}
+    return out;
+  }
+  function saveTimes() {
+    try { localStorage.setItem(TIMES_KEY, JSON.stringify(settings)); } catch (e) {}
+  }
+  function parseDur(str) {
+    var t = String(str).trim();
+    if (!t) return null;
+    var total;
+    if (t.indexOf(':') > -1) {
+      var parts = t.split(':');
+      if (parts.length > 2) return null;
+      var m = parseInt(parts[0], 10);
+      var s = parseInt(parts[1], 10);
+      if (!isFinite(m) || !isFinite(s) || m < 0 || s < 0 || s > 59) return null;
+      total = m * 60 + s;
+    } else {
+      var n = parseInt(t, 10);
+      if (!isFinite(n) || n < 0) return null;
+      total = n;
+    }
+    return (total >= 1 && total <= 3600) ? total : null;
+  }
+  function activeKind() {
+    if (phase === 'jam' || phase === 'ready') return 'jam';
+    if (phase === 'lineup') return 'lineup';
+    if (phase === 'timeout') return 'timeout';
+    return null;
+  }
+  function setLength(kind, sec) {
+    var old = settings[kind];
+    if (sec === old) return;
+    settings[kind] = sec;
+    saveTimes();
+    var delta = (sec - old) * 1000;
+    var lim = sec * 1000;
+    if (kind === 'period') {
+      if (period.running) {
+        period.value = Math.max(0, Math.min(lim, read(period) + delta));
+        period.anchor = now();
+      } else if (phase === 'ready') {
+        period.value = lim;
+      } else if (phase === 'lineup' || phase === 'timeout') {
+        period.value = Math.max(0, Math.min(lim, period.value + delta));
+      }
+    } else if (kind === 'jam') {
+      if (phase === 'jam') {
+        main.value = Math.max(0, Math.min(lim, read(main) + delta));
+        main.anchor = now();
+      } else if (phase === 'ready') {
+        main.value = lim;
+      }
+    } else if (kind === 'lineup') {
+      if (phase === 'lineup') {
+        main.value = Math.max(0, Math.min(lim, read(main) + delta));
+        main.anchor = now();
+      }
+    } else if (kind === 'timeout') {
+      if (phase === 'timeout') {
+        main.value = Math.max(0, Math.min(lim, read(main) + delta));
+        main.anchor = now();
+      }
+    }
+    render();
+  }
+  function startEdit(kind) {
+    editing = kind;
+    el.editorLabel.textContent = KIND_LABELS[kind];
+    el.editorInput.value = fmt(settings[kind] * 1000);
+    el.editor.hidden = false;
+    el.configLine.hidden = true;
+    setTimeout(function () {
+      try { el.editorInput.focus(); el.editorInput.select(); } catch (e) {}
+    }, 10);
+  }
+  function stopEdit() {
+    editing = null;
+    el.editor.hidden = true;
+    el.configLine.hidden = false;
+  }
+  function commitEdit() {
+    if (!editing) return;
+    var kind = editing;
+    var sec = parseDur(el.editorInput.value);
+    stopEdit();
+    if (sec != null) setLength(kind, sec);
+    else render();
+  }
+  function cancelEdit() {
+    if (!editing) return;
+    stopEdit();
+    render();
+  }
+
   function startJam() {
+    stopEdit();
     if (phase === 'done') {
       if (periodNo < PERIODS) startNextPeriod();
       return;
@@ -236,22 +394,23 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     if (phase === 'ready') {
       periodNo = 1;
       jamNo = 0;
-      period = { value: PERIOD_MS, running: false, anchor: 0 };
+      period = { value: settings.period * 1000, running: false, anchor: 0 };
     }
     jamNo += 1;
     phase = 'jam';
-    setMain('jam', JAM_MS, true);
+    setMain('jam', settings.jam * 1000, true);
     if (period.value > 0) start(period);
     render();
   }
 
   function endJam(auto) {
     if (phase !== 'jam') return;
+    stopEdit();
     stop(main);
     if (auto) alertEnd();
     if (read(period) <= 0) { periodOver(); return; }
     phase = 'lineup';
-    setMain('lineup', LINEUP_MS, true);
+    setMain('lineup', settings.lineup * 1000, true);
     render();
   }
 
@@ -264,38 +423,42 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
   }
 
   function startNextPeriod() {
+    stopEdit();
     periodNo += 1;
-    period = { value: PERIOD_MS, running: false, anchor: 0 };
+    period = { value: settings.period * 1000, running: false, anchor: 0 };
     phase = 'lineup';
-    setMain('lineup', LINEUP_MS, true);
+    setMain('lineup', settings.lineup * 1000, true);
     render();
   }
 
   function toggleTimeout() {
     if (phase === 'timeout') { endTimeout(); return; }
     if (phase !== 'jam' && phase !== 'lineup') return;
+    stopEdit();
     stop(main);
     stop(period);
     phase = 'timeout';
-    setMain('timeout', TIMEOUT_MS, true);
+    setMain('timeout', settings.timeout * 1000, true);
     render();
   }
 
   function endTimeout() {
     if (phase !== 'timeout') return;
+    stopEdit();
     stop(main);
     if (read(period) <= 0) { periodOver(); return; }
     phase = 'lineup';
-    setMain('lineup', LINEUP_MS, true);
+    setMain('lineup', settings.lineup * 1000, true);
     render();
   }
 
   function resetAll() {
+    stopEdit();
     phase = 'ready';
     periodNo = 1;
     jamNo = 0;
-    period = { value: PERIOD_MS, running: false, anchor: 0 };
-    setMain('jam', JAM_MS, false);
+    period = { value: settings.period * 1000, running: false, anchor: 0 };
+    setMain('jam', settings.jam * 1000, false);
     render();
   }
 
@@ -369,6 +532,14 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     set(el.clockSub, sub);
     set(el.clockTime, fmt(m));
 
+    set(el.cfgJam, fmt(settings.jam * 1000));
+    set(el.cfgLineup, fmt(settings.lineup * 1000));
+    set(el.cfgTimeout, fmt(settings.timeout * 1000));
+    var active = activeKind();
+    el.cfgJam.parentElement.classList.toggle('active', active === 'jam');
+    el.cfgLineup.parentElement.classList.toggle('active', active === 'lineup');
+    el.cfgTimeout.parentElement.classList.toggle('active', active === 'timeout');
+
     if (el.primary.textContent !== plabel) el.primary.textContent = plabel;
     el.primary.className = 'primary ' + pclass;
     el.timeout.disabled = tdis;
@@ -412,15 +583,31 @@ body[data-phase="timeout"] .clockTime{color:var(--warn)}
     alertEnd();
   });
   el.reset.addEventListener('click', handleReset);
+  el.periodTime.addEventListener('click', function () { startEdit('period'); });
+  el.clockTime.addEventListener('click', function () {
+    var k = activeKind();
+    if (k) startEdit(k);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.cfg'), function (btn) {
+    btn.addEventListener('click', function () { startEdit(btn.dataset.kind); });
+  });
+  el.editorSet.addEventListener('click', commitEdit);
+  el.editorCancel.addEventListener('click', cancelEdit);
+  el.editorInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+    else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+  });
   document.addEventListener('pointerdown', function () { audio(); });
 
   window.__jt = {
     get phase() { return phase; },
     get jam() { return jamNo; },
     get periodNo() { return periodNo; },
+    get times() { return settings; },
     read: function () { return { period: read(period), main: read(main) }; },
     setMain: function (ms) { main.value = Math.max(0, ms); main.anchor = now(); },
     setPeriod: function (ms) { period.value = Math.max(0, ms); period.anchor = now(); },
+    setLength: setLength,
     alert: alertEnd
   };
 
