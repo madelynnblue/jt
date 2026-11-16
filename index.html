@@ -91,6 +91,11 @@ body[data-phase="lineup"] .clockTime{color:var(--blue)}
 body[data-phase="timeout"] .clockTime{color:var(--warn)}
 body[data-phase="jam"] .clockTime.over,
 body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
+@keyframes cuePulse {
+  0%, 100% { box-shadow: inset 0 0 0 0 transparent; }
+  25% { box-shadow: inset 0 0 0 4px var(--warn); }
+}
+.clock.cue { animation: cuePulse 1s ease-out; }
 .clockSub{font-size:clamp(.7rem,2.7vw,.9rem);color:var(--muted);text-align:center;min-height:1.2em}
 .configLine{display:flex;flex-wrap:wrap;justify-content:center;gap:1px 10px;margin-top:1px}
 .cfg{
@@ -259,6 +264,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
     periodMeta: document.getElementById('periodMeta'),
     jamMeta: document.getElementById('jamMeta'),
     periodTime: document.getElementById('periodTime'),
+    clock: document.querySelector('.clock'),
     clockLabel: document.getElementById('clockLabel'),
     clockTime: document.getElementById('clockTime'),
     clockSub: document.getElementById('clockSub'),
@@ -318,7 +324,36 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
 
   function warnHaptic() {
     if (!navigator.vibrate) return;
-    try { navigator.vibrate([90, 60, 90]); } catch (e) {}
+    try { navigator.vibrate(1100); } catch (e) {}
+  }
+
+  function tickSound() {
+    var a = audio();
+    if (!a) return;
+    var t = a.currentTime + 0.01;
+    var o = a.createOscillator();
+    var g = a.createGain();
+    o.type = 'sine';
+    o.frequency.value = 1174;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.10, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    o.connect(g);
+    g.connect(a.destination);
+    o.start(t);
+    o.stop(t + 0.13);
+  }
+
+  function cueWarning() {
+    lineupWarned = true;
+    warnHaptic();
+    tickSound();
+    var c = el.clock;
+    if (!c) return;
+    c.classList.remove('cue');
+    void c.offsetWidth;
+    c.classList.add('cue');
+    setTimeout(function () { c.classList.remove('cue'); }, 1100);
   }
 
   function flash(text) {
@@ -715,8 +750,7 @@ body[data-phase="lineup"] .clockTime.over{color:var(--stop)}
         lineupAlerted = true;
         alertEnd();
       } else if (m > 0 && settings.warn > 0 && m <= settings.warn * 1000 && !lineupWarned) {
-        lineupWarned = true;
-        warnHaptic();
+        cueWarning();
       }
     }
     if (phase === 'lineup' && p <= 0) periodOver();
